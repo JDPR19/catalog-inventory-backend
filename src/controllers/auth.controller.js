@@ -106,10 +106,14 @@ const login = async (req, res, next) => {
     }
 };
 
+const { cloudinary } = require('../config/cloudinary');
+
+// ... (keep register and login as is)
+
 const updateUser = async (req, res, next) => {
     const { id } = req.params;
     const { nombre, apellido, email, password } = req.body;
-    const imagen = req.file ? req.file.filename : undefined;
+    const imagen = req.file ? req.file.path : undefined;
 
     console.log('--- UpdateUser Debug ---');
     console.log('Params ID:', id, 'Type:', typeof id);
@@ -124,6 +128,14 @@ const updateUser = async (req, res, next) => {
     // Convertir ambos a número para evitar problemas de tipos (string vs number)
     if (Number(id) !== Number(req.user.id)) {
         console.log(`Authorization failed: ${Number(id)} !== ${Number(req.user.id)}`);
+        // Si se subió una imagen pero falló la autorización, borrarla de Cloudinary
+        if (req.file) {
+            try {
+                await cloudinary.uploader.destroy(req.file.filename);
+            } catch (err) {
+                console.error('Error al eliminar imagen:', err);
+            }
+        }
         return res.status(403).json({ message: 'No tienes permiso para editar este usuario' });
     }
 
@@ -131,6 +143,7 @@ const updateUser = async (req, res, next) => {
         // First, get the current user to check for old image
         const currentUserResult = await pool.query('SELECT imagen FROM usuarios WHERE id = $1', [id]);
         const currentUser = currentUserResult.rows[0];
+        const oldImagen = currentUser?.imagen;
 
         let query = 'UPDATE usuarios SET nombre = $1, apellido = $2, email = $3';
         let values = [nombre, apellido, email];
@@ -148,16 +161,16 @@ const updateUser = async (req, res, next) => {
             values.push(imagen);
             paramIndex++;
 
-            // Delete old image if it exists
-            if (currentUser && currentUser.imagen) {
-                const fs = require('fs');
-                const path = require('path');
-                const oldImagePath = path.join('uploads', currentUser.imagen);
-                // Check if file exists before trying to unlink to avoid errors
-                if (fs.existsSync(oldImagePath)) {
-                    fs.unlink(oldImagePath, (err) => {
-                        if (err) console.error('Error deleting old image:', err);
-                    });
+            // Delete old image if it exists and is different
+            if (oldImagen && oldImagen !== imagen && oldImagen.includes('cloudinary')) {
+                try {
+                    const parts = oldImagen.split('/');
+                    const filenameWithExt = parts[parts.length - 1];
+                    const folder = parts[parts.length - 2];
+                    const publicId = `${folder}/${filenameWithExt.split('.')[0]}`;
+                    await cloudinary.uploader.destroy(publicId);
+                } catch (err) {
+                    console.error('Error deleting old image from Cloudinary:', err);
                 }
             }
         }
