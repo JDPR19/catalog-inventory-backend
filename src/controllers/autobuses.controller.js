@@ -1,6 +1,5 @@
 const pool = require('../db/db');
-const fs = require('fs').promises;
-const path = require('path');
+const { cloudinary } = require('../config/cloudinary');
 
 const getAllAutobuses = async (req, res, next) => {
     try {
@@ -28,16 +27,16 @@ const getAutobusesById = async (req, res, next) => {
 
 const createAutobuses = async (req, res, next) => {
     const { marca, modelo, uso, descripcion, motor, puertas, asientos, transmision, combustible, neumaticos, direccion } = req.body;
-    const imagen = req.file ? req.file.filename : null;
+    const imagen = req.file ? req.file.path : null; // Guardar la URL de Cloudinary
 
     // Validar campos requeridos
     if (!marca || !modelo) {
-        // Si hay imagen, eliminarla porque el registro falló
+        // Si hay imagen, eliminarla de Cloudinary porque el registro falló
         if (req.file) {
             try {
-                await fs.unlink(req.file.path);
+                await cloudinary.uploader.destroy(req.file.filename);
             } catch (err) {
-                console.error('Error al eliminar imagen:', err);
+                console.error('Error al eliminar imagen de Cloudinary:', err);
             }
         }
         return res.status(400).json({ message: 'Marca y modelo son campos requeridos' });
@@ -54,11 +53,11 @@ const createAutobuses = async (req, res, next) => {
     } catch (error) {
         console.error('Error al Crear el registro', error);
 
-        // Si hay error en la BD, eliminar la imagen que se subió
+        // Si hay error en la BD, eliminar la imagen de Cloudinary
         if (req.file) {
             try {
-                await fs.unlink(req.file.path);
-                console.log('Imagen eliminada debido a error en BD');
+                await cloudinary.uploader.destroy(req.file.filename);
+                console.log('Imagen eliminada de Cloudinary debido a error en BD');
             } catch (err) {
                 console.error('Error al eliminar imagen:', err);
             }
@@ -72,14 +71,13 @@ const editAutobuses = async (req, res, next) => {
     const { id } = req.params;
     const { marca, modelo, uso, descripcion, motor, puertas, asientos, transmision, combustible, neumaticos, direccion } = req.body;
 
-    const imagen = req.file ? req.file.filename : undefined;
+    const imagen = req.file ? req.file.path : undefined;
 
     // Validar campos requeridos
     if (!marca || !modelo) {
-        // Si hay imagen nueva, eliminarla porque el registro falló
         if (req.file) {
             try {
-                await fs.unlink(req.file.path);
+                await cloudinary.uploader.destroy(req.file.filename);
             } catch (err) {
                 console.error('Error al eliminar imagen:', err);
             }
@@ -95,16 +93,16 @@ const editAutobuses = async (req, res, next) => {
         let query = `
             UPDATE autobuses
             SET marca = $1,
-                modelo = $2,
-                uso = $3,
-                descripcion = $4,
-                motor = $5,
-                puertas = $6,
-                asientos = $7,
-                transmision = $8,
-                combustible = $9,
-                neumaticos = $10,
-                direccion = $11
+            modelo = $2,
+            uso = $3,
+            descripcion = $4,
+            motor = $5,
+            puertas = $6,
+            asientos = $7,
+            transmision = $8,
+            combustible = $9,
+            neumaticos = $10,
+            direccion = $11
         `;
         const values = [marca, modelo, uso, descripcion, motor, puertas, asientos, transmision, combustible, neumaticos, direccion];
 
@@ -118,12 +116,20 @@ const editAutobuses = async (req, res, next) => {
 
         const response = await pool.query(query, values);
 
-        // Si la actualización fue exitosa y hay nueva imagen, eliminar la antigua
+        // Si la actualización fue exitosa y hay nueva imagen, eliminar la antigua de Cloudinary
         if (imagen && oldImagen && oldImagen !== imagen) {
             try {
-                const oldImagePath = path.join('uploads', oldImagen);
-                await fs.unlink(oldImagePath);
-                console.log('Imagen antigua eliminada');
+                // Intentar extraer public_id si es una URL de Cloudinary
+                if (oldImagen.includes('cloudinary')) {
+                    const parts = oldImagen.split('/');
+                    const filenameWithExt = parts[parts.length - 1];
+                    const folder = parts[parts.length - 2];
+                    // Remover extensión
+                    const publicId = `${folder}/${filenameWithExt.split('.')[0]}`;
+
+                    await cloudinary.uploader.destroy(publicId);
+                    console.log('Imagen antigua eliminada de Cloudinary');
+                }
             } catch (err) {
                 console.error('Error al eliminar imagen antigua:', err);
             }
@@ -133,11 +139,9 @@ const editAutobuses = async (req, res, next) => {
     } catch (error) {
         console.error(`Error al editar el registro para la id:${id}`, error);
 
-        // Si hay error en la BD, eliminar la nueva imagen que se subió
         if (req.file) {
             try {
-                await fs.unlink(req.file.path);
-                console.log('Nueva imagen eliminada debido a error en BD');
+                await cloudinary.uploader.destroy(req.file.filename);
             } catch (err) {
                 console.error('Error al eliminar imagen:', err);
             }
@@ -151,7 +155,6 @@ const deleteAutobuses = async (req, res, next) => {
     const { id } = req.params;
 
     try {
-        // Primero obtener la imagen para eliminarla
         const bus = await pool.query('SELECT imagen FROM autobuses WHERE id = $1', [id]);
         const imagen = bus.rows[0]?.imagen;
 
@@ -160,14 +163,17 @@ const deleteAutobuses = async (req, res, next) => {
             return res.status(404).json({ message: 'Autobus no encontrado o inexistente' });
         }
 
-        // Eliminar la imagen del servidor si existe
-        if (imagen) {
+        if (imagen && imagen.includes('cloudinary')) {
             try {
-                const imagePath = path.join('uploads', imagen);
-                await fs.unlink(imagePath);
-                console.log('Imagen eliminada del servidor');
+                const parts = imagen.split('/');
+                const filenameWithExt = parts[parts.length - 1];
+                const folder = parts[parts.length - 2];
+                const publicId = `${folder}/${filenameWithExt.split('.')[0]}`;
+
+                await cloudinary.uploader.destroy(publicId);
+                console.log('Imagen eliminada de Cloudinary');
             } catch (err) {
-                console.error('Error al eliminar imagen del servidor:', err);
+                console.error('Error al eliminar imagen de Cloudinary:', err);
             }
         }
 
@@ -177,8 +183,6 @@ const deleteAutobuses = async (req, res, next) => {
         next(error);
     }
 }
-
-
 
 module.exports = {
     getAllAutobuses,

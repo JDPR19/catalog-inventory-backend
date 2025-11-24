@@ -3,6 +3,14 @@ const morgan = require('morgan');
 const cors = require('cors');
 const db = require('./src/db/db');
 const path = require('path');
+const fs = require('fs');
+
+// Crear carpeta uploads si no existe
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+    console.log('📁 Carpeta uploads creada');
+}
 
 // Rutas //
 const autobusesRoutes = require('./src/routes/autobuses.routes');
@@ -18,7 +26,22 @@ const allowed = [
 ];
 
 const corsOptions = {
-    origin: allowed,
+    origin: function (origin, callback) {
+        // Permitir requests sin origin (como mobile apps o curl)
+        if (!origin) return callback(null, true);
+
+        // Permitir dominios específicos
+        if (allowed.indexOf(origin) !== -1) {
+            callback(null, true);
+        }
+        // Permitir todos los dominios de Vercel (preview deployments)
+        else if (origin.endsWith('.vercel.app')) {
+            callback(null, true);
+        }
+        else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS']
 };
