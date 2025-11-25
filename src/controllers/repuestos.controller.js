@@ -27,19 +27,9 @@ const getRepuestosById = async (req, res, next) => {
 
 const createRepuestos = async (req, res, next) => {
     const { nombre, categoria, descripcion, codigo, modelo } = req.body;
-    const imagen = req.file ? req.file.path : null; // Guardar URL de Cloudinary
+    const imagen = req.file ? req.file.path : null;
 
     try {
-        // Check for duplicates
-        const checkDuplicate = await pool.query('SELECT * FROM repuestos WHERE nombre = $1', [nombre]);
-        if (checkDuplicate.rows.length > 0) {
-            // Si hay imagen subida, eliminarla
-            if (req.file) {
-                await cloudinary.uploader.destroy(req.file.filename);
-            }
-            return res.status(409).json({ message: 'El repuesto ya existe' });
-        }
-
         const response = await pool.query(`
             INSERT INTO repuestos (nombre, categoria, descripcion, imagen, codigo, modelo)
             VALUES ($1, $2, $3, $4, $5, $6)
@@ -48,7 +38,6 @@ const createRepuestos = async (req, res, next) => {
         return res.status(201).json(response.rows[0]);
     } catch (error) {
         console.error('Error al Crear el registro', error);
-        // Si hay error, eliminar imagen de Cloudinary
         if (req.file) {
             try {
                 await cloudinary.uploader.destroy(req.file.filename);
@@ -66,7 +55,6 @@ const editRepuestos = async (req, res, next) => {
     const imagen = req.file ? req.file.path : undefined;
 
     try {
-        // Obtener imagen anterior
         const oldPart = await pool.query('SELECT imagen FROM repuestos WHERE id = $1', [id]);
         const oldImagen = oldPart.rows[0]?.imagen;
 
@@ -90,7 +78,6 @@ const editRepuestos = async (req, res, next) => {
 
         const response = await pool.query(query, values);
 
-        // Eliminar imagen anterior si se actualizó
         if (imagen && oldImagen && oldImagen !== imagen) {
             try {
                 if (oldImagen.includes('cloudinary')) {
