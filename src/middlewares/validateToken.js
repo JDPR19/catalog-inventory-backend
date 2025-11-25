@@ -8,7 +8,7 @@ const validateToken = (req, res, next) => {
     }
 
     try {
-        // El token suele venir como "Bearer <token>", así que quitamos "Bearer "
+        // El token sue venir como "Bearer <token>", así que quitamos "Bearer "
         const bearerToken = token.startsWith('Bearer ') ? token.slice(7, token.length) : token;
 
         const verified = jwt.verify(bearerToken, process.env.JWT_SECRET || 'secretkey');

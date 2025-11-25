@@ -26,7 +26,7 @@ const getRepuestosById = async (req, res, next) => {
 }
 
 const createRepuestos = async (req, res, next) => {
-    const { nombre, categoria, descripcion } = req.body;
+    const { nombre, categoria, descripcion, codigo, modelo } = req.body;
     const imagen = req.file ? req.file.path : null; // Guardar URL de Cloudinary
 
     try {
@@ -41,10 +41,10 @@ const createRepuestos = async (req, res, next) => {
         }
 
         const response = await pool.query(`
-            INSERT INTO repuestos (nombre, categoria, descripcion, imagen)
-            VALUES ($1, $2, $3, $4)
+            INSERT INTO repuestos (nombre, categoria, descripcion, imagen, codigo, modelo)
+            VALUES ($1, $2, $3, $4, $5, $6)
             RETURNING *
-        `, [nombre, categoria, descripcion, imagen]);
+        `, [nombre, categoria, descripcion, imagen, codigo, modelo]);
         return res.status(201).json(response.rows[0]);
     } catch (error) {
         console.error('Error al Crear el registro', error);
@@ -62,7 +62,7 @@ const createRepuestos = async (req, res, next) => {
 
 const editRepuestos = async (req, res, next) => {
     const { id } = req.params;
-    const { nombre, categoria, descripcion } = req.body;
+    const { nombre, categoria, descripcion, codigo, modelo } = req.body;
     const imagen = req.file ? req.file.path : undefined;
 
     try {
@@ -74,15 +74,17 @@ const editRepuestos = async (req, res, next) => {
             UPDATE repuestos
             SET nombre = $1,
             categoria = $2,
-            descripcion = $3
+            descripcion = $3,
+            codigo = $4,
+            modelo = $5
         `;
-        const values = [nombre, categoria, descripcion];
+        const values = [nombre, categoria, descripcion, codigo, modelo];
 
         if (imagen) {
-            query += `, imagen = $4 WHERE id = $5 RETURNING *`;
+            query += `, imagen = $6 WHERE id = $7 RETURNING *`;
             values.push(imagen, id);
         } else {
-            query += ` WHERE id = $4 RETURNING *`;
+            query += ` WHERE id = $6 RETURNING *`;
             values.push(id);
         }
 
