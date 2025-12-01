@@ -19,6 +19,7 @@ const authRoutes = require('./src/routes/auth.routes');
 
 // configuracion de Cors //
 const allowed = [
+    "https://catalog-inventory-frontend.vercel.app",
     'http://localhost:5173',
     'http://localhost:5174',
     'https://catalog-inventory-frontend.vercel.app',
